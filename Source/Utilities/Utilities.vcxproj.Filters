@@ -45,5 +45,14 @@
     <ClInclude Include="dw_i2s.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="acp.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="acp_2_2_d.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="acp_2_2_sh_mask.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

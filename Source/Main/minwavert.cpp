@@ -1677,11 +1677,11 @@ CMiniportWaveRT::AcquireDMA(_In_ PCMiniportWaveRTStream _Stream) {
 }
 
 NTSTATUS
-CMiniportWaveRT::StartDMA(UINT32 byteCount) {
+CMiniportWaveRT::StartDMA() {
     if (!m_pAdapterCommon) {
         return STATUS_NO_SUCH_DEVICE;
     }
-    return m_pAdapterCommon->StartDMA(m_DeviceType, byteCount);
+    return m_pAdapterCommon->StartDMA(m_DeviceType);
 }
 
 NTSTATUS

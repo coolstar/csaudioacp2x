@@ -601,8 +601,8 @@ Return Value:
     //
     // Install wave+topology filters for capture devices
     //
-    ntStatus = InstallAllCaptureFilters(DeviceObject, Irp, pAdapterCommon);
-    IF_FAILED_JUMP(ntStatus, Exit);
+    //ntStatus = InstallAllCaptureFilters(DeviceObject, Irp, pAdapterCommon);
+    //IF_FAILED_JUMP(ntStatus, Exit);
 
 Exit:
 

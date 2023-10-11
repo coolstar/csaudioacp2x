@@ -80,8 +80,7 @@ private:
         _In_ IPortWaveRTStream* stream);
 
     STDMETHODIMP_(NTSTATUS) StartDMA(
-        _In_ eDeviceType deviceType,
-        _In_ UINT32 byteCount
+        _In_ eDeviceType deviceType
     );
     STDMETHODIMP_(NTSTATUS) StopDMA(
         _In_ eDeviceType deviceType
@@ -841,11 +840,11 @@ CAdapterCommon::PrepareDMA(
     _In_ IPortWaveRTStream* stream
 ) {
     if (m_pHW) {
-        NTSTATUS status = m_pHW->acp3x_hw_params(deviceType);
+        NTSTATUS status = m_pHW->acp2x_hw_params(deviceType);
         if (!NT_SUCCESS(status)) {
             return status;
         }
-        return  m_pHW->acp3x_program_dma(deviceType, mdl, stream);
+        return  m_pHW->acp2x_program_dma(deviceType, mdl, stream);
     }
     return STATUS_NO_SUCH_DEVICE;
 }
@@ -854,11 +853,10 @@ CAdapterCommon::PrepareDMA(
 #pragma code_seg()
 STDMETHODIMP_(NTSTATUS)
 CAdapterCommon::StartDMA(
-    _In_ eDeviceType deviceType,
-    _In_ UINT32 byteCount
+    _In_ eDeviceType deviceType
 ) {
     if (m_pHW) {
-        return m_pHW->acp3x_play(deviceType, byteCount);
+        return m_pHW->acp2x_play(deviceType);
     }
     return STATUS_NO_SUCH_DEVICE;
 }
@@ -870,7 +868,7 @@ CAdapterCommon::StopDMA(
     _In_ eDeviceType deviceType
 ) {
     if (m_pHW) {
-        return m_pHW->acp3x_stop(deviceType);
+        return m_pHW->acp2x_stop(deviceType);
     }
     return STATUS_NO_SUCH_DEVICE;
 }
@@ -884,7 +882,7 @@ CAdapterCommon::CurrentPosition(
     _Out_ UINT64* linearPos
 ) {
     if (m_pHW) {
-        return m_pHW->acp3x_current_position(deviceType, linkPos, linearPos);
+        return m_pHW->acp2x_current_position(deviceType, linkPos, linearPos);
     }
     return STATUS_NO_SUCH_DEVICE;
 }

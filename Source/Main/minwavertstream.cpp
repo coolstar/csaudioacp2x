@@ -267,7 +267,7 @@ VOID CMiniportWaveRTStream::GetHWLatency
 
     Latency_->ChipsetDelay = 0;
     Latency_->CodecDelay = 0;
-    Latency_->FifoSize = FIFO_SIZE;
+    Latency_->FifoSize = 0;
 }
 
 //=============================================================================
@@ -352,7 +352,7 @@ NTSTATUS CMiniportWaveRTStream::GetPosition
     UINT64 linearPos;
     m_pMiniport->CurrentPosition(NULL, &linearPos);
     Position_->PlayOffset = linearPos;
-    Position_->WriteOffset = linearPos + FIFO_SIZE;
+    Position_->WriteOffset = linearPos;
 
     KeReleaseSpinLock(&m_PositionSpinLock, oldIrql);
 
@@ -409,7 +409,7 @@ NTSTATUS CMiniportWaveRTStream::SetState
                 return ntStatus;
             }
 
-            m_pMiniport->StartDMA(m_ulDmaBufferSize);
+            m_pMiniport->StartDMA();
             if (!NT_SUCCESS(ntStatus)) {
                 return ntStatus;
             }

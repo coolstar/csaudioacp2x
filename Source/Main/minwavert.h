@@ -94,7 +94,6 @@ public:
     );
 
     NTSTATUS StartDMA(
-        UINT32 byteCount
     );
 
     NTSTATUS StopDMA();
