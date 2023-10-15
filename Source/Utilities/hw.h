@@ -124,6 +124,7 @@ protected:
     UINT                        m_uiDevSpecific;
 #if USEACPHW
     PCI_BAR m_BAR6;
+    PCI_BAR m_MISCBAR; //Misc Base for enabling Clock
 
     struct acp_stream btStreams[2];
     struct acp_stream i2sStreams[2];

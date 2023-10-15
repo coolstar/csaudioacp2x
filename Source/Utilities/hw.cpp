@@ -57,8 +57,12 @@ Return Value:
         m_BAR6.Len = (ULONG)(end.QuadPart - start.QuadPart);
         //m_BAR6.Base.Base = NULL;
         //m_BAR6.Len = 0;
-        return;
     }
+
+    PHYSICAL_ADDRESS miscAddr;
+    miscAddr.QuadPart = 0xFED80E00;
+    m_MISCBAR.Base.Base = MmMapIoSpace(miscAddr, 0x100, MmNonCached);
+    m_MISCBAR.Len = 0x100;
 #endif
     
     MixerReset();
@@ -68,6 +72,8 @@ Return Value:
 bool CCsAudioAcp2xHW::ResourcesValidated() {
     if (!m_BAR6.Base.Base)
         return false;
+    if (!m_MISCBAR.Base.Base)
+        return false;
     return true && NT_SUCCESS(this->CSAudioAPIInit());
 }
 
@@ -75,6 +81,8 @@ CCsAudioAcp2xHW::~CCsAudioAcp2xHW() {
 #if USEACPHW
     if (m_BAR6.Base.Base)
         MmUnmapIoSpace(m_BAR6.Base.Base, m_BAR6.Len);
+    if (m_MISCBAR.Base.Base)
+        MmUnmapIoSpace(m_MISCBAR.Base.Base, m_MISCBAR.Len);
 #endif
     this->CSAudioAPIDeinit();
 }
@@ -283,6 +291,11 @@ NTSTATUS CCsAudioAcp2xHW::acp2x_init() {
     RtlZeroMemory(&this->i2sStreams, sizeof(this->i2sStreams));
 
 #if USEACPHW
+    //Set clock to 48 Mhz instead of 25 Mhz
+    UINT32 val = read32(m_MISCBAR.Base.baseptr + MISCCLKCNTL1);
+    val &= ~BIT(OSCCLKENB); //Disable 25 Mhz
+    write32(m_MISCBAR.Base.baseptr + MISCCLKCNTL1, val);
+
     NTSTATUS status = acp2x_power_on();
     return status;
 #else
