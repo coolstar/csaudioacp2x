@@ -70,6 +70,9 @@ typedef struct _PCI_BAR {
 } PCI_BAR, * PPCI_BAR;
 
 struct acp_stream {
+    UINT32 bufferBytes;
+    BOOL isActive;
+
     UINT32 pte_offset;
     UINT16 ch1;
     UINT16 ch2;
@@ -144,6 +147,8 @@ private:
     NTSTATUS acp2x_power_on();
     NTSTATUS acp2x_power_off();
 
+    UINT32 acp_get_i2s_regs(eDeviceType deviceType);
+    BOOL acp_is_playback(eDeviceType deviceType);
     struct acp_stream* acp_get_stream(eDeviceType deviceType);
 
     void acp_set_sram_bank_state(UINT16 bank, bool power_on);
@@ -171,7 +176,7 @@ public:
     NTSTATUS acp2x_deinit();
 
     NTSTATUS acp2x_hw_params(eDeviceType deviceType);
-    NTSTATUS acp2x_program_dma(eDeviceType deviceType, PMDL mdl, IPortWaveRTStream* stream);
+    NTSTATUS acp2x_program_dma(eDeviceType deviceType, PMDL mdl, IPortWaveRTStream* stream, UINT32 bytesCount);
     NTSTATUS acp2x_play(eDeviceType deviceType);
     NTSTATUS acp2x_stop(eDeviceType deviceType);
     NTSTATUS acp2x_current_position(eDeviceType deviceType, UINT32* linkPos, UINT64* linearPos);

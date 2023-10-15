@@ -1673,7 +1673,7 @@ CMiniportWaveRT::AcquireDMA(_In_ PCMiniportWaveRTStream _Stream) {
     if (!m_pAdapterCommon) {
         return STATUS_NO_SUCH_DEVICE;
     }
-    return m_pAdapterCommon->PrepareDMA(m_DeviceType, _Stream->m_pMDL, _Stream->m_pPortStream);
+    return m_pAdapterCommon->PrepareDMA(m_DeviceType, _Stream->m_pMDL, _Stream->m_pPortStream, _Stream->m_ulDmaBufferSize);
 }
 
 NTSTATUS

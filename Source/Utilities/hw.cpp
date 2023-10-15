@@ -299,6 +299,27 @@ NTSTATUS CCsAudioAcp2xHW::acp2x_deinit() {
 #endif
 }
 
+BOOL CCsAudioAcp2xHW::acp_is_playback(eDeviceType deviceType) {
+    return (deviceType == eSpeakerDevice || deviceType == eHeadphoneDevice);
+}
+
+UINT32 CCsAudioAcp2xHW::acp_get_i2s_regs(eDeviceType deviceType) {
+    switch (deviceType) {
+    case eSpeakerDevice:
+        return ACP_BT_PLAY_REGS_START;
+    case eHeadphoneDevice:
+        return ACP_I2S_PLAY_REGS_START;
+    case eMicArrayDevice1:
+        return ACP_BT_PLAY_REGS_START;
+    case eMicJackDevice:
+        return ACP_I2S_CAP_REGS_START;
+    default:
+        DbgPrint("Unknown device type\n");
+        DPF(D_ERROR, "Unknown device type");
+        return NULL;
+    }
+}
+
 struct acp_stream* CCsAudioAcp2xHW::acp_get_stream(eDeviceType deviceType) {
     switch (deviceType) {
     case eSpeakerDevice:
@@ -320,27 +341,46 @@ NTSTATUS CCsAudioAcp2xHW::acp2x_hw_params(eDeviceType deviceType) {
 #if USEACPHW
     DbgPrint("%s: Setting hw params\n", __func__);
 
-    if (deviceType == eSpeakerDevice) {
-        UINT32 i2s_base = ACP_BT_PLAY_REGS_START;
-
-        UINT32 comp1 = i2s_read32(i2s_base, ACP_BT_COMP1_REG_OFFSET);
-        UINT32 comp2 = i2s_read32(i2s_base, ACP_BT_COMP2_REG_OFFSET);
-
-        if (COMP1_MODE_EN(comp1)) {
-            DbgPrint("dw-i2s supports master mode\n");
+    UINT32 i2s_base = acp_get_i2s_regs(deviceType);
+    {
+        UINT32 comp1;
+        UINT32 comp2;
+        switch (deviceType) {
+        case eSpeakerDevice:
+            comp1 = i2s_read32(i2s_base, ACP_BT_COMP1_REG_OFFSET);
+            comp2 = i2s_read32(i2s_base, ACP_BT_COMP2_REG_OFFSET);
+            break;
+        case eHeadphoneDevice:
+            comp1 = i2s_read32(i2s_base, ACP_I2S_COMP1_PLAY_REG_OFFSET);
+            comp1 = i2s_read32(i2s_base, ACP_I2S_COMP2_PLAY_REG_OFFSET);
+            break;
+        case eMicArrayDevice1:
+            comp1 = i2s_read32(i2s_base, ACP_I2S_COMP1_CAP_REG_OFFSET);
+            comp1 = i2s_read32(i2s_base, ACP_I2S_COMP2_CAP_REG_OFFSET);
+            break;
+        case eMicJackDevice:
+            comp1 = i2s_read32(i2s_base, ACP_I2S_COMP1_CAP_REG_OFFSET);
+            comp1 = i2s_read32(i2s_base, ACP_I2S_COMP2_CAP_REG_OFFSET);
+            break;
+        default:
+            DPF(D_ERROR, "Unknown device type");
+            return STATUS_INVALID_PARAMETER;
         }
 
         UINT32 fifo_depth = 1 << (1 + COMP1_FIFO_DEPTH_GLOBAL(comp1));
+        DbgPrint("fifo_depth: %d\n", fifo_depth);
 
-        //Configure DW I2S for headphone
+        BOOL isPlayback = acp_is_playback(deviceType);
+
+        //Stop DW I2S channels
         for (int i = 0; i < 4; i++) {
-            i2s_write32(i2s_base, TER(i), 0);
+            i2s_write32(i2s_base, isPlayback ? TER(i) : RER(i), 0);
         }
 
-        for (int i = 0; i < 2; i++) {
-            i2s_write32(i2s_base, TCR(i), 0x02);
-            i2s_write32(i2s_base, TFCR(i), (fifo_depth / 2) - 1);
-            i2s_write32(i2s_base, TER(i), 1);
+        for (int ch_reg = 0; ch_reg < 1; ch_reg++) {
+            i2s_write32(i2s_base, isPlayback ? TCR(ch_reg) : RCR(ch_reg), 0x02);
+            i2s_write32(i2s_base, isPlayback ? TFCR(ch_reg) : RFCR(ch_reg), (fifo_depth / 2) - 1);
+            i2s_write32(i2s_base, isPlayback ? TER(ch_reg) : RER(ch_reg), 1);
         }
 
         i2s_write32(i2s_base, CCR, 0);
@@ -619,14 +659,14 @@ void CCsAudioAcp2xHW::acp_set_sram_bank_state(UINT16 bank, bool power_on)
     }
 }
 
-NTSTATUS CCsAudioAcp2xHW::acp2x_program_dma(eDeviceType deviceType, PMDL mdl, IPortWaveRTStream *stream) {
+NTSTATUS CCsAudioAcp2xHW::acp2x_program_dma(eDeviceType deviceType, PMDL mdl, IPortWaveRTStream *stream, UINT32 bytesCount) {
 #if USEACPHW
     int pageCount = stream->GetPhysicalPagesCount(mdl);
     if (pageCount < 1) {
         return STATUS_NO_MEMORY;
     }
 
-    DbgPrint("%s: Programming DMA\n", __func__);
+    DbgPrint("%s: Programming DMA with buffer size %d\n", __func__, bytesCount);
 
     acp_set_sram_bank_state(0, true);
 
@@ -637,6 +677,7 @@ NTSTATUS CCsAudioAcp2xHW::acp2x_program_dma(eDeviceType deviceType, PMDL mdl, IP
     if (!acpStream) {
         return STATUS_INVALID_PARAMETER;
     }
+    acpStream->bufferBytes = bytesCount;
 
     UINT32 pte_offset = acpStream->pte_offset;
     UINT32 offset = ACP_DAGB_GRP_SRBM_SRAM_BASE_OFFSET + (pte_offset * 8);
@@ -650,7 +691,7 @@ NTSTATUS CCsAudioAcp2xHW::acp2x_program_dma(eDeviceType deviceType, PMDL mdl, IP
 
         acp_write32(mmACP_SRBM_Targ_Idx_Data, low);
         /* Load the High address of page int ACP SRAM through SRBM */
-        acp_write32(mmACP_SRBM_Targ_Idx_Addr, high);
+        acp_write32(mmACP_SRBM_Targ_Idx_Addr, offset + (page_idx * 8) + 4);
 
         /* page enable in ACP */
         high |= BIT(31);
@@ -659,14 +700,7 @@ NTSTATUS CCsAudioAcp2xHW::acp2x_program_dma(eDeviceType deviceType, PMDL mdl, IP
 
     DbgPrint("%s: Configured PTEs\n", __func__);
 
-    if (deviceType == eSpeakerDevice) {
-        UINT32 i2s_base = ACP_BT_PLAY_REGS_START;
-
-        i2s_write32(i2s_base, TXFFR, 1);
-    }
-
-    BOOL isPlaying = (deviceType == eSpeakerDevice || deviceType == eHeadphoneDevice);
-
+    BOOL isPlaying = acp_is_playback(deviceType);
     UINT16 ch_acp_sysmem, ch_acp_i2s;
     if (isPlaying) {
         ch_acp_sysmem = acpStream->ch1;
@@ -680,7 +714,7 @@ NTSTATUS CCsAudioAcp2xHW::acp2x_program_dma(eDeviceType deviceType, PMDL mdl, IP
     DbgPrint("%s: Configured Sysmem\n", __func__);
 
     // Configure System memory <-> ACP SRAM DMA descriptors
-    set_acp_sysmem_dma_descriptors(MmGetMdlByteCount(mdl),
+    set_acp_sysmem_dma_descriptors(bytesCount,
         isPlaying, acpStream->pte_offset,
         ch_acp_sysmem, acpStream->sram_bank,
         acpStream->dma_dscr_idx_1);
@@ -688,12 +722,18 @@ NTSTATUS CCsAudioAcp2xHW::acp2x_program_dma(eDeviceType deviceType, PMDL mdl, IP
     DbgPrint("%s: Configured I2S DMA\n", __func__);
 
     /* Configure ACP SRAM <-> I2S DMA descriptors */
-    set_acp_to_i2s_dma_descriptors(MmGetMdlByteCount(mdl),
+    set_acp_to_i2s_dma_descriptors(bytesCount,
         isPlaying, acpStream->sram_bank,
         acpStream->destination, ch_acp_i2s,
         acpStream->dma_dscr_idx_2);
 
+    config_acp_dma_channel(ch_acp_sysmem, acpStream->dma_dscr_idx_1, NUM_DSCRS_PER_CHANNEL, ACP_DMA_PRIORITY_LEVEL_NORMAL);
+    config_acp_dma_channel(ch_acp_i2s, acpStream->dma_dscr_idx_2, NUM_DSCRS_PER_CHANNEL, ACP_DMA_PRIORITY_LEVEL_NORMAL);
+
     DbgPrint("%s: Programmed DMA\n", __func__);
+
+    UINT32 i2s_base = acp_get_i2s_regs(deviceType);
+    i2s_write32(i2s_base, isPlaying ? TXFFR : RXFFR, 1);
 
 #endif
     return STATUS_SUCCESS;
@@ -782,7 +822,7 @@ NTSTATUS CCsAudioAcp2xHW::acp_dma_stop(UINT16 ch_num)
             DbgPrint("Failed to stop ACP DMA channel : %d\n", ch_num);
             return STATUS_IO_TIMEOUT;
         }
-        udelay(100);
+        udelay(10);
     }
     return STATUS_SUCCESS;
 }
@@ -794,24 +834,32 @@ NTSTATUS CCsAudioAcp2xHW::acp2x_play(eDeviceType deviceType) {
         return STATUS_INVALID_PARAMETER;
     }
 
-    DbgPrint("%s: Start ch1\n", __func__);
-
-    acp_dma_start(acpStream->ch1, TRUE);
-
-    DbgPrint("%s: Start ch2\n", __func__);
-
-    acp_dma_start(acpStream->ch2, TRUE);
-
-    if (deviceType == eSpeakerDevice) {
-        UINT32 i2s_base = ACP_BT_PLAY_REGS_START;
-
-        i2s_write32(i2s_base, TXFFR, 1);
-        i2s_write32(i2s_base, IER, 1);
-        i2s_write32(i2s_base, ITER, 1);
-        i2s_write32(i2s_base, CER, 1);
+    if (acpStream->isActive) {
+        return STATUS_SUCCESS;
     }
 
+    DbgPrint("%s: Start ch1\n", __func__);
+    acp_dma_start(acpStream->ch1, TRUE);
+    DbgPrint("%s: Start ch2\n", __func__);
+    acp_dma_start(acpStream->ch2, TRUE);
+
+    UINT32 i2s_base = acp_get_i2s_regs(deviceType);
+    BOOL isPlaying = acp_is_playback(deviceType);
+
+    i2s_write32(i2s_base, IER, 1);
+
+    UINT32 irq = i2s_read32(i2s_base, IMR(0));
+    if (isPlaying)
+        i2s_write32(i2s_base, IMR(0), irq & ~0x30);
+    else
+        i2s_write32(i2s_base, IMR(0), irq & ~0x03);
+
+    i2s_write32(i2s_base, isPlaying ? ITER : IRER, 1);
+    i2s_write32(i2s_base, CER, 1);
+
     DbgPrint("%s: Started Play\n", __func__);
+
+    acpStream->isActive = TRUE;
 #endif
 
     CsAudioArg arg;
@@ -837,23 +885,39 @@ NTSTATUS CCsAudioAcp2xHW::acp2x_stop(eDeviceType deviceType) {
         return STATUS_INVALID_PARAMETER;
     }
 
-    DbgPrint("%s: Stop ch2\n", __func__);
-
-    acp_dma_stop(acpStream->ch2);
-
-    DbgPrint("%s: Stop ch1\n", __func__);
-
-    acp_dma_stop(acpStream->ch1);
-
-    if (deviceType == eSpeakerDevice) {
-        UINT32 i2s_base = ACP_BT_PLAY_REGS_START;
-
-        i2s_write32(i2s_base, ITER, 0);
-        i2s_write32(i2s_base, CER, 0);
-        i2s_write32(i2s_base, IER, 0);
+    if (!acpStream->isActive) {
+        return STATUS_SUCCESS;
     }
 
+    DbgPrint("%s: Stop ch2\n", __func__);
+    acp_dma_stop(acpStream->ch2);
+    DbgPrint("%s: Stop ch1\n", __func__);
+    acp_dma_stop(acpStream->ch1);
+
+    UINT32 i2s_base = acp_get_i2s_regs(deviceType);
+    BOOL isPlaying = acp_is_playback(deviceType);
+
+    for (int i = 0; i < 4; i++)
+        i2s_read32(i2s_base, isPlaying ? TOR(i) : ROR(i));
+
+    for (int i = 0; i < 4; i++) {
+        UINT32 irq = i2s_read32(i2s_base, IMR(i));
+        if (isPlaying)
+            i2s_write32(i2s_base, IMR(i), irq | 0x30);
+        else
+            i2s_write32(i2s_base, IMR(i), irq | 0x03);
+    }
+
+    i2s_write32(i2s_base, isPlaying ? ITER : IRER, 0);
+
+    //TODO: This may be shared
+    i2s_write32(i2s_base, CER, 0);
+    i2s_write32(i2s_base, IER, 0);
+
     DbgPrint("%s: Stopped Playback\n", __func__);
+
+    acpStream->isActive = FALSE;
+    acpStream->bufferBytes = 0;
 #endif
     return STATUS_SUCCESS;
 }
@@ -868,10 +932,19 @@ NTSTATUS CCsAudioAcp2xHW::acp2x_current_position(eDeviceType deviceType, UINT32 
     UINT32 linearHigh = acp_read32(acpStream->byte_cnt_high_reg_offset);
     UINT32 linearLow = acp_read32(acpStream->byte_cnt_low_reg_offset);
 
+    UINT64 rawPos = ((UINT64)linearHigh << 32) | (UINT64)linearLow;
+    UINT64 rawPosMod = rawPos;
+    if (acpStream->bufferBytes == 0) {
+        rawPosMod = 0;
+    }
+    else {
+        rawPosMod = rawPos % acpStream->bufferBytes;
+    }
+
     if (linkPos)
         *linkPos = linearLow;
     if (linearPos)
-        *linearPos = ((UINT64)linearHigh << 32) | (UINT64)linearLow;
+        *linearPos = rawPosMod;
 #endif
     return STATUS_SUCCESS;
 }

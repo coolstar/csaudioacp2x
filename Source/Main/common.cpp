@@ -77,7 +77,8 @@ private:
     STDMETHODIMP_(NTSTATUS) PrepareDMA(
         _In_ eDeviceType deviceType,
         _In_ PMDL mdl,
-        _In_ IPortWaveRTStream* stream);
+        _In_ IPortWaveRTStream* stream,
+        _In_ UINT32 bytesCount);
 
     STDMETHODIMP_(NTSTATUS) StartDMA(
         _In_ eDeviceType deviceType
@@ -837,14 +838,15 @@ STDMETHODIMP_(NTSTATUS)
 CAdapterCommon::PrepareDMA(
     _In_ eDeviceType deviceType,
     _In_ PMDL mdl,
-    _In_ IPortWaveRTStream* stream
+    _In_ IPortWaveRTStream* stream,
+    _In_ UINT32 bytesCount
 ) {
     if (m_pHW) {
         NTSTATUS status = m_pHW->acp2x_hw_params(deviceType);
         if (!NT_SUCCESS(status)) {
             return status;
         }
-        return  m_pHW->acp2x_program_dma(deviceType, mdl, stream);
+        return  m_pHW->acp2x_program_dma(deviceType, mdl, stream, bytesCount);
     }
     return STATUS_NO_SUCH_DEVICE;
 }
