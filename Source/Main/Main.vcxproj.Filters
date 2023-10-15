@@ -63,7 +63,7 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ResourceCompile Include="csaudioacp3x.rc">
+    <ResourceCompile Include="csaudioacp2x.rc">
       <Filter>Resource Files</Filter>
     </ResourceCompile>
   </ItemGroup>

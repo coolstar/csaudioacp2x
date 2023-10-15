@@ -15,6 +15,24 @@ Abstract:
 #include "definitions.h"
 #include "hw.h"
 
+UINT32 pciConfigReadDWord(UINT8 bus, UINT8 slot, UINT8 func, UINT8 offset) {
+    UINT32 address;
+    UINT32 lbus = (UINT32)bus;
+    UINT32 lslot = (UINT32)slot;
+    UINT32 lfunc = (UINT32)func;
+    UINT32 tmp = 0;
+
+    // Create configuration address as per Figure 1
+    address = (UINT32)((lbus << 16) | (lslot << 11) |
+        (lfunc << 8) | (offset & 0xFC) | ((UINT32)0x80000000));
+
+    // Write out the address
+    __outdword(PCI_IO_CONFIG_INDEX, address);
+    // Read in the data
+    tmp = __indword(PCI_IO_CONFIG_DATA + (offset & 3));
+    return tmp;
+}
+
 //=============================================================================
 // CCsAudioAcp2xHW
 //=============================================================================
@@ -45,18 +63,20 @@ Return Value:
 #if USEACPHW
     PCM_PARTIAL_RESOURCE_DESCRIPTOR partialDescriptor = (ResourceList->FindTranslatedEntry(CmResourceTypeMemory, 0));
     if (partialDescriptor) {
-        m_BAR6.Base.Base = MmMapIoSpace(partialDescriptor->u.Memory.Start, partialDescriptor->u.Memory.Length, MmNonCached);
-        m_BAR6.Len = partialDescriptor->u.Memory.Length;
+        m_BAR5.Base.Base = MmMapIoSpace(partialDescriptor->u.Memory.Start, partialDescriptor->u.Memory.Length, MmNonCached);
+        m_BAR5.Len = partialDescriptor->u.Memory.Length;
     }
     else {
+        //No _CRS found. Grab IO Manually
+
+        UINT32 BAR5Addr = pciConfigReadDWord(0, GFX_DEV, GFX_FUNC, BAR5);
+
         PHYSICAL_ADDRESS start;
-        PHYSICAL_ADDRESS end;
-        start.QuadPart = 0xE0D00000;
-        end.QuadPart = 0xE0D3FFFF;
-        m_BAR6.Base.Base = MmMapIoSpace(start, end.QuadPart - start.QuadPart, MmNonCached);
-        m_BAR6.Len = (ULONG)(end.QuadPart - start.QuadPart);
-        //m_BAR6.Base.Base = NULL;
-        //m_BAR6.Len = 0;
+        start.QuadPart = BAR5Addr & 0xFFFFFFF0;
+        UINT32 Length = 0x40000;
+
+        m_BAR5.Base.Base = MmMapIoSpace(start, Length, MmNonCached);
+        m_BAR5.Len = Length;
     }
 
     PHYSICAL_ADDRESS miscAddr;
@@ -70,7 +90,7 @@ Return Value:
 #pragma code_seg()
 
 bool CCsAudioAcp2xHW::ResourcesValidated() {
-    if (!m_BAR6.Base.Base)
+    if (!m_BAR5.Base.Base)
         return false;
     if (!m_MISCBAR.Base.Base)
         return false;
@@ -79,8 +99,8 @@ bool CCsAudioAcp2xHW::ResourcesValidated() {
 
 CCsAudioAcp2xHW::~CCsAudioAcp2xHW() {
 #if USEACPHW
-    if (m_BAR6.Base.Base)
-        MmUnmapIoSpace(m_BAR6.Base.Base, m_BAR6.Len);
+    if (m_BAR5.Base.Base)
+        MmUnmapIoSpace(m_BAR5.Base.Base, m_BAR5.Len);
     if (m_MISCBAR.Base.Base)
         MmUnmapIoSpace(m_MISCBAR.Base.Base, m_MISCBAR.Len);
 #endif
@@ -107,8 +127,8 @@ void CCsAudioAcp2xHW::udelay(ULONG usec) {
 
 UINT32 CCsAudioAcp2xHW::cgs_read32(UINT32 reg)
 {
-    if ((reg * 4) < m_BAR6.Len) {
-        return read32(m_BAR6.Base.baseptr + (reg * 4));
+    if ((reg * 4) < m_BAR5.Len) {
+        return read32(m_BAR5.Base.baseptr + (reg * 4));
     }
     DbgPrint("Invalid read from cgs register: 0x%x\n", reg);
     return 0;
@@ -116,8 +136,8 @@ UINT32 CCsAudioAcp2xHW::cgs_read32(UINT32 reg)
 
 void CCsAudioAcp2xHW::cgs_write32(UINT32 reg, UINT32 val)
 {
-    if ((reg * 4) < m_BAR6.Len) {
-        write32(m_BAR6.Base.baseptr + (reg * 4), val);
+    if ((reg * 4) < m_BAR5.Len) {
+        write32(m_BAR5.Base.baseptr + (reg * 4), val);
         return;
     }
     DbgPrint("Invalid write to cgs register: 0x%x\n", reg);
@@ -135,12 +155,12 @@ void CCsAudioAcp2xHW::acp_write32(UINT32 reg, UINT32 val)
 
 UINT32 CCsAudioAcp2xHW::i2s_read32(UINT32 i2s_base, UINT32 reg)
 {
-    return read32(m_BAR6.Base.baseptr + i2s_base + reg);
+    return read32(m_BAR5.Base.baseptr + i2s_base + reg);
 }
 
 void CCsAudioAcp2xHW::i2s_write32(UINT32 i2s_base, UINT32 reg, UINT32 val)
 {
-    write32(m_BAR6.Base.baseptr + i2s_base + reg, val);
+    write32(m_BAR5.Base.baseptr + i2s_base + reg, val);
 }
 
 NTSTATUS CCsAudioAcp2xHW::acp_readl_poll_timeout(UINT32 reg, UINT32 val, UINT32 mask, ULONG sleep_us, ULONG timeout_us) {

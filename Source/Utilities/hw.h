@@ -59,6 +59,18 @@ typedef struct CSAUDIOARG {
 #define GENMASK(h, l) (((~0UL) - (1UL << (l)) + 1) & (~0UL >> (BITS_PER_LONG - 1 - (h))))
 #define BIT(nr) (1UL << (nr))
 
+#define PCI_IO_CONFIG_INDEX		0xcf8
+#define PCI_IO_CONFIG_DATA		0xcfc
+
+/*
+ * Stoney Internal Graphics
+ */
+#define GFX_DEV			0x1
+#define GFX_FUNC		0
+#define PCI_DEVFN(slot, func)	((((slot) & 0x1f) << 3) | ((func) & 0x07))
+
+#define BAR5 0x24
+
 union baseaddr {
     PVOID Base;
     UINT8* baseptr;
@@ -123,7 +135,7 @@ protected:
     INT                         m_iDevSpecific;
     UINT                        m_uiDevSpecific;
 #if USEACPHW
-    PCI_BAR m_BAR6;
+    PCI_BAR m_BAR5;
     PCI_BAR m_MISCBAR; //Misc Base for enabling Clock
 
     struct acp_stream btStreams[2];
