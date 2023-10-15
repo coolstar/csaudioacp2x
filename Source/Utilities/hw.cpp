@@ -195,7 +195,6 @@ NTSTATUS CCsAudioAcp2xHW::acp2x_power_on() {
             break;
 
         if (--count == 0) {
-            DbgPrint("Failed to reset ACP\n");
             goto failure;
         }
 
@@ -214,7 +213,6 @@ NTSTATUS CCsAudioAcp2xHW::acp2x_power_on() {
             break;
 
         if (--count == 0) {
-            DbgPrint("Failed to enable clock to ACP\n");
             goto failure;
         }
 
@@ -250,8 +248,6 @@ NTSTATUS CCsAudioAcp2xHW::acp2x_power_on() {
     cgs_write32(mmACP_DMA_DESC_MAX_NUM_DSCR, 0x4);
     cgs_write32(mmACP_EXTERNAL_INTR_CNTL, ACP_EXTERNAL_INTR_CNTL__DMAIOCMask_MASK);
 
-    DbgPrint("ACP powered on!\n");
-
     return STATUS_SUCCESS;
 
 failure:
@@ -274,7 +270,6 @@ NTSTATUS CCsAudioAcp2xHW::acp2x_power_off() {
             break;
 
         if (--count == 0) {
-            DbgPrint("Failed to reset ACP\n");
             goto failure;
         }
 
@@ -293,7 +288,6 @@ NTSTATUS CCsAudioAcp2xHW::acp2x_power_off() {
             break;
 
         if (--count == 0) {
-            DbgPrint("Failed to disable clock to ACP\n");
             goto failure;
         }
 
@@ -563,8 +557,6 @@ void CCsAudioAcp2xHW::pre_config_reset(UINT16 ch_num)
     acp_write32(mmACP_DMA_CNTL_0 + ch_num, dma_ctrl);
     /* check the reset bit before programming configuration registers */
     status = acp_readl_poll_timeout(mmACP_DMA_CNTL_0 + ch_num, 0, ACP_DMA_CNTL_0__DMAChRst_MASK, 100, ACP_DMA_RESET_TIME);
-    if (!NT_SUCCESS(status))
-        DbgPrint("Failed to clear reset of channel : %d\n", ch_num);
 }
 
 void CCsAudioAcp2xHW::set_acp_sysmem_dma_descriptors(UINT32 size, BOOL playback, UINT32 pte_offset, UINT16 ch,
@@ -832,7 +824,6 @@ NTSTATUS CCsAudioAcp2xHW::acp_dma_stop(UINT16 ch_num)
             break;
         }
         if (--count == 0) {
-            DbgPrint("Failed to stop ACP DMA channel : %d\n", ch_num);
             return STATUS_IO_TIMEOUT;
         }
         udelay(10);
