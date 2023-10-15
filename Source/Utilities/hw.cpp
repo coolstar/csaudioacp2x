@@ -320,6 +320,32 @@ NTSTATUS CCsAudioAcp2xHW::acp2x_hw_params(eDeviceType deviceType) {
 #if USEACPHW
     DbgPrint("%s: Setting hw params\n", __func__);
 
+    if (deviceType == eSpeakerDevice) {
+        UINT32 i2s_base = ACP_BT_PLAY_REGS_START;
+
+        UINT32 comp1 = i2s_read32(i2s_base, ACP_BT_COMP1_REG_OFFSET);
+        UINT32 comp2 = i2s_read32(i2s_base, ACP_BT_COMP2_REG_OFFSET);
+
+        if (COMP1_MODE_EN(comp1)) {
+            DbgPrint("dw-i2s supports master mode\n");
+        }
+
+        UINT32 fifo_depth = 1 << (1 + COMP1_FIFO_DEPTH_GLOBAL(comp1));
+
+        //Configure DW I2S for headphone
+        for (int i = 0; i < 4; i++) {
+            i2s_write32(i2s_base, TER(i), 0);
+        }
+
+        for (int i = 0; i < 2; i++) {
+            i2s_write32(i2s_base, TCR(i), 0x02);
+            i2s_write32(i2s_base, TFCR(i), (fifo_depth / 2) - 1);
+            i2s_write32(i2s_base, TER(i), 1);
+        }
+
+        i2s_write32(i2s_base, CCR, 0);
+    }
+
     //Set resolution (Only for stoney)
     UINT32 val = acp_read32(mmACP_I2S_16BIT_RESOLUTION_EN);
     switch (deviceType) {
@@ -633,28 +659,10 @@ NTSTATUS CCsAudioAcp2xHW::acp2x_program_dma(eDeviceType deviceType, PMDL mdl, IP
 
     DbgPrint("%s: Configured PTEs\n", __func__);
 
-    if (deviceType == eHeadphoneDevice) {
-        UINT32 i2s_base = ACP_I2S_PLAY_REGS_START;
+    if (deviceType == eSpeakerDevice) {
+        UINT32 i2s_base = ACP_BT_PLAY_REGS_START;
 
-        UINT32 comp1 = i2s_read32(i2s_base, ACP_I2S_COMP1_PLAY_REG_OFFSET);
-        UINT32 comp2 = i2s_read32(i2s_base, ACP_I2S_COMP2_PLAY_REG_OFFSET);
-
-        if (COMP1_MODE_EN(comp1)) {
-            DbgPrint("dw-i2s supports master mode\n");
-        }
-
-        UINT32 fifo_depth = 1 << (1 + COMP1_FIFO_DEPTH_GLOBAL(comp1));
-
-        //Configure DW I2S for headphone
-        for (int i = 0; i < 4; i++) {
-            i2s_write32(i2s_base, TER(i), 0);
-        }
-
-        i2s_write32(i2s_base, TCR(0), 0x02);
-        i2s_write32(i2s_base, TFCR(0), (fifo_depth / 2) - 1);
-        i2s_write32(i2s_base, TER(0), 1);
-
-        i2s_write32(i2s_base, CCR, 0);
+        i2s_write32(i2s_base, TXFFR, 1);
     }
 
     BOOL isPlaying = (deviceType == eSpeakerDevice || deviceType == eHeadphoneDevice);
@@ -794,8 +802,8 @@ NTSTATUS CCsAudioAcp2xHW::acp2x_play(eDeviceType deviceType) {
 
     acp_dma_start(acpStream->ch2, TRUE);
 
-    if (deviceType == eHeadphoneDevice) {
-        UINT32 i2s_base = ACP_I2S_PLAY_REGS_START;
+    if (deviceType == eSpeakerDevice) {
+        UINT32 i2s_base = ACP_BT_PLAY_REGS_START;
 
         i2s_write32(i2s_base, TXFFR, 1);
         i2s_write32(i2s_base, IER, 1);
@@ -829,14 +837,6 @@ NTSTATUS CCsAudioAcp2xHW::acp2x_stop(eDeviceType deviceType) {
         return STATUS_INVALID_PARAMETER;
     }
 
-    if (deviceType == eHeadphoneDevice) {
-        UINT32 i2s_base = ACP_I2S_PLAY_REGS_START;
-
-        i2s_write32(i2s_base, ITER, 0);
-        i2s_write32(i2s_base, CER, 0);
-        i2s_write32(i2s_base, IER, 0);
-    }
-
     DbgPrint("%s: Stop ch2\n", __func__);
 
     acp_dma_stop(acpStream->ch2);
@@ -844,6 +844,14 @@ NTSTATUS CCsAudioAcp2xHW::acp2x_stop(eDeviceType deviceType) {
     DbgPrint("%s: Stop ch1\n", __func__);
 
     acp_dma_stop(acpStream->ch1);
+
+    if (deviceType == eSpeakerDevice) {
+        UINT32 i2s_base = ACP_BT_PLAY_REGS_START;
+
+        i2s_write32(i2s_base, ITER, 0);
+        i2s_write32(i2s_base, CER, 0);
+        i2s_write32(i2s_base, IER, 0);
+    }
 
     DbgPrint("%s: Stopped Playback\n", __func__);
 #endif
