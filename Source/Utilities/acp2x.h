@@ -93,6 +93,7 @@
 #define ST_MAX_BUFFER (ST_PLAYBACK_MAX_PERIOD_SIZE * PLAYBACK_MAX_NUM_PERIODS)
 #define ST_MIN_BUFFER ST_MAX_BUFFER
 
+#define ACPIMMIO_MISC_BASE		0xFED80E00
  /* Clock Control 1 register */
 #define MISCCLKCNTL1	0x40
 /* Auxiliary clock1 enable bit */

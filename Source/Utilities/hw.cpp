@@ -60,7 +60,7 @@ Return Value:
     }
 
     PHYSICAL_ADDRESS miscAddr;
-    miscAddr.QuadPart = 0xFED80E00;
+    miscAddr.QuadPart = ACPIMMIO_MISC_BASE;
     m_MISCBAR.Base.Base = MmMapIoSpace(miscAddr, 0x100, MmNonCached);
     m_MISCBAR.Len = 0x100;
 #endif
@@ -327,7 +327,6 @@ UINT32 CCsAudioAcp2xHW::acp_get_i2s_regs(eDeviceType deviceType) {
     case eMicJackDevice:
         return ACP_I2S_CAP_REGS_START;
     default:
-        DbgPrint("Unknown device type\n");
         DPF(D_ERROR, "Unknown device type");
         return NULL;
     }
@@ -344,7 +343,6 @@ struct acp_stream* CCsAudioAcp2xHW::acp_get_stream(eDeviceType deviceType) {
     case eMicJackDevice:
         return &this->i2sStreams[1];
     default:
-        DbgPrint("Unknown device type\n");
         DPF(D_ERROR, "Unknown device type");
         return NULL;
     }
@@ -352,8 +350,6 @@ struct acp_stream* CCsAudioAcp2xHW::acp_get_stream(eDeviceType deviceType) {
 
 NTSTATUS CCsAudioAcp2xHW::acp2x_hw_params(eDeviceType deviceType) {
 #if USEACPHW
-    DbgPrint("%s: Setting hw params\n", __func__);
-
     UINT32 i2s_base = acp_get_i2s_regs(deviceType);
     {
         UINT32 comp1;
@@ -381,7 +377,6 @@ NTSTATUS CCsAudioAcp2xHW::acp2x_hw_params(eDeviceType deviceType) {
         }
 
         UINT32 fifo_depth = 1 << (1 + COMP1_FIFO_DEPTH_GLOBAL(comp1));
-        DbgPrint("fifo_depth: %d\n", fifo_depth);
 
         BOOL isPlayback = acp_is_playback(deviceType);
 
@@ -485,8 +480,6 @@ NTSTATUS CCsAudioAcp2xHW::acp2x_hw_params(eDeviceType deviceType) {
         DPF(D_ERROR, "Unknown device type");
         return STATUS_INVALID_PARAMETER;
     }
-
-    DbgPrint("%s: Finished set hw params\n", __func__);
 
 #endif
     return STATUS_SUCCESS;
@@ -665,7 +658,6 @@ void CCsAudioAcp2xHW::acp_set_sram_bank_state(UINT16 bank, bool power_on)
 
     while (acp_read32(sts_reg) != sts_reg_mask) {
         if (!loops--) {
-            DbgPrint("ACP SRAM bank %d state change failed\n", bank);
             break;
         }
         udelay(10);
@@ -679,11 +671,7 @@ NTSTATUS CCsAudioAcp2xHW::acp2x_program_dma(eDeviceType deviceType, PMDL mdl, IP
         return STATUS_NO_MEMORY;
     }
 
-    DbgPrint("%s: Programming DMA with buffer size %d\n", __func__, bytesCount);
-
     acp_set_sram_bank_state(0, true);
-
-    DbgPrint("%s: Set bank state\n", __func__);
 
     //Configure PTEs
     struct acp_stream* acpStream = acp_get_stream(deviceType);
@@ -711,8 +699,6 @@ NTSTATUS CCsAudioAcp2xHW::acp2x_program_dma(eDeviceType deviceType, PMDL mdl, IP
         acp_write32(mmACP_SRBM_Targ_Idx_Data, high);
     }
 
-    DbgPrint("%s: Configured PTEs\n", __func__);
-
     BOOL isPlaying = acp_is_playback(deviceType);
     UINT16 ch_acp_sysmem, ch_acp_i2s;
     if (isPlaying) {
@@ -724,15 +710,11 @@ NTSTATUS CCsAudioAcp2xHW::acp2x_program_dma(eDeviceType deviceType, PMDL mdl, IP
         ch_acp_sysmem = acpStream->ch2;
     }
 
-    DbgPrint("%s: Configured Sysmem\n", __func__);
-
     // Configure System memory <-> ACP SRAM DMA descriptors
     set_acp_sysmem_dma_descriptors(bytesCount,
         isPlaying, acpStream->pte_offset,
         ch_acp_sysmem, acpStream->sram_bank,
         acpStream->dma_dscr_idx_1);
-
-    DbgPrint("%s: Configured I2S DMA\n", __func__);
 
     /* Configure ACP SRAM <-> I2S DMA descriptors */
     set_acp_to_i2s_dma_descriptors(bytesCount,
@@ -742,8 +724,6 @@ NTSTATUS CCsAudioAcp2xHW::acp2x_program_dma(eDeviceType deviceType, PMDL mdl, IP
 
     config_acp_dma_channel(ch_acp_sysmem, acpStream->dma_dscr_idx_1, NUM_DSCRS_PER_CHANNEL, ACP_DMA_PRIORITY_LEVEL_NORMAL);
     config_acp_dma_channel(ch_acp_i2s, acpStream->dma_dscr_idx_2, NUM_DSCRS_PER_CHANNEL, ACP_DMA_PRIORITY_LEVEL_NORMAL);
-
-    DbgPrint("%s: Programmed DMA\n", __func__);
 
     UINT32 i2s_base = acp_get_i2s_regs(deviceType);
     i2s_write32(i2s_base, isPlaying ? TXFFR : RXFFR, 1);
@@ -851,9 +831,7 @@ NTSTATUS CCsAudioAcp2xHW::acp2x_play(eDeviceType deviceType) {
         return STATUS_SUCCESS;
     }
 
-    DbgPrint("%s: Start ch1\n", __func__);
     acp_dma_start(acpStream->ch1, TRUE);
-    DbgPrint("%s: Start ch2\n", __func__);
     acp_dma_start(acpStream->ch2, TRUE);
 
     UINT32 i2s_base = acp_get_i2s_regs(deviceType);
@@ -869,8 +847,6 @@ NTSTATUS CCsAudioAcp2xHW::acp2x_play(eDeviceType deviceType) {
 
     i2s_write32(i2s_base, isPlaying ? ITER : IRER, 1);
     i2s_write32(i2s_base, CER, 1);
-
-    DbgPrint("%s: Started Play\n", __func__);
 
     acpStream->isActive = TRUE;
 #endif
@@ -902,9 +878,7 @@ NTSTATUS CCsAudioAcp2xHW::acp2x_stop(eDeviceType deviceType) {
         return STATUS_SUCCESS;
     }
 
-    DbgPrint("%s: Stop ch2\n", __func__);
     acp_dma_stop(acpStream->ch2);
-    DbgPrint("%s: Stop ch1\n", __func__);
     acp_dma_stop(acpStream->ch1);
 
     UINT32 i2s_base = acp_get_i2s_regs(deviceType);
@@ -926,8 +900,6 @@ NTSTATUS CCsAudioAcp2xHW::acp2x_stop(eDeviceType deviceType) {
     //TODO: This may be shared
     i2s_write32(i2s_base, CER, 0);
     i2s_write32(i2s_base, IER, 0);
-
-    DbgPrint("%s: Stopped Playback\n", __func__);
 
     acpStream->isActive = FALSE;
     acpStream->bufferBytes = 0;
