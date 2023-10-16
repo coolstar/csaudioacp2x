@@ -1,6 +1,6 @@
-# CoolStar Audio for AMD ACP 3.0
+# CoolStar Audio for AMD ACP 2.2
 
-Open Source alternative for the AMD ACP 3.0 driver (may also work on newer AMD chipsets using ACP)
+Open Source AMD ACP 2.2 driver
 
 Currently Implemented:
 
@@ -10,11 +10,6 @@ Currently Implemented:
 * Play / Pause / Stop support for streams
 * WDM Position Counter
 
-Not Yet Implemented:
-* Notifications using IRQ with watermark register
+Tested on HP Chromebook 14a (AMD A4-9120C)
 
-Tested on HP Chromebook 14b (Ryzen 3 3250C)
-
-Based off SimpleAudioSample (commit 9e1a643093cac60cd333b6d69abc1e4118a12d63) and TabletAudioSample from Microsoft's WDK 10 samples
-
-Based off Linux commit 6f6f28bf5d8e070c1e4a10d62d2a1af264683042 (relevant to sound/soc/amd/raven folder)
+Based off csaudioacp3x driver and Linux kernel 6.4 (soc/dwc and soc/amd)
