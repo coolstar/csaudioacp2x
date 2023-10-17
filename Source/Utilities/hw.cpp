@@ -330,6 +330,22 @@ BOOL CCsAudioAcp2xHW::acp_is_playback(eDeviceType deviceType) {
     return (deviceType == eSpeakerDevice || deviceType == eHeadphoneDevice);
 }
 
+eDeviceType CCsAudioAcp2xHW::acp_get_companion(eDeviceType deviceType) {
+    switch (deviceType) {
+    case eSpeakerDevice:
+        return eHeadphoneDevice;
+    case eHeadphoneDevice:
+        return eSpeakerDevice;
+    case eMicArrayDevice1:
+        return eMicJackDevice;
+    case eMicJackDevice:
+        return eMicArrayDevice1;
+    default:
+        DPF(D_ERROR, "Unknown device type");
+        return eSpeakerDevice;
+    }
+}
+
 UINT32 CCsAudioAcp2xHW::acp_get_i2s_regs(eDeviceType deviceType) {
     switch (deviceType) {
     case eSpeakerDevice:
@@ -337,7 +353,6 @@ UINT32 CCsAudioAcp2xHW::acp_get_i2s_regs(eDeviceType deviceType) {
     case eHeadphoneDevice:
         return ACP_I2S_PLAY_REGS_START;
     case eMicArrayDevice1:
-        return ACP_BT_PLAY_REGS_START;
     case eMicJackDevice:
         return ACP_I2S_CAP_REGS_START;
     default:
@@ -364,6 +379,15 @@ struct acp_stream* CCsAudioAcp2xHW::acp_get_stream(eDeviceType deviceType) {
 
 NTSTATUS CCsAudioAcp2xHW::acp2x_hw_params(eDeviceType deviceType) {
 #if USEACPHW
+    eDeviceType companionDevice = acp_get_companion(deviceType);
+    struct acp_stream* acpCompanionStream = acp_get_stream(companionDevice);
+    if (acpCompanionStream->isActive) {
+        NTSTATUS status = acp2x_stop(companionDevice);
+        if (!NT_SUCCESS(status)) {
+            return status;
+        }
+    }
+
     UINT32 i2s_base = acp_get_i2s_regs(deviceType);
     {
         UINT32 comp1;
@@ -378,9 +402,6 @@ NTSTATUS CCsAudioAcp2xHW::acp2x_hw_params(eDeviceType deviceType) {
             comp1 = i2s_read32(i2s_base, ACP_I2S_COMP2_PLAY_REG_OFFSET);
             break;
         case eMicArrayDevice1:
-            comp1 = i2s_read32(i2s_base, ACP_I2S_COMP1_CAP_REG_OFFSET);
-            comp1 = i2s_read32(i2s_base, ACP_I2S_COMP2_CAP_REG_OFFSET);
-            break;
         case eMicJackDevice:
             comp1 = i2s_read32(i2s_base, ACP_I2S_COMP1_CAP_REG_OFFSET);
             comp1 = i2s_read32(i2s_base, ACP_I2S_COMP2_CAP_REG_OFFSET);
@@ -418,8 +439,6 @@ NTSTATUS CCsAudioAcp2xHW::acp2x_hw_params(eDeviceType deviceType) {
         val |= ACP_I2S_SP_16BIT_RESOLUTION_EN;
         break;
     case eMicArrayDevice1:
-        val |= ACP_I2S_BT_16BIT_RESOLUTION_EN;
-        break;
     case eMicJackDevice:
         val |= ACP_I2S_MIC_16BIT_RESOLUTION_EN;
         break;
@@ -439,7 +458,7 @@ NTSTATUS CCsAudioAcp2xHW::acp2x_hw_params(eDeviceType deviceType) {
         stream->pte_offset = ACP_ST_BT_PLAYBACK_PTE_OFFSET;
         stream->ch1 = SYSRAM_TO_ACP_BT_INSTANCE_CH_NUM;
         stream->ch2 = ACP_TO_I2S_DMA_BT_INSTANCE_CH_NUM;
-        stream->sram_bank = ACP_SRAM_BANK_3_ADDRESS;
+        stream->sram_bank = ACP_SRAM_BANK_1_ADDRESS;
         stream->destination = TO_BLUETOOTH;
         stream->dma_dscr_idx_1 = PLAYBACK_START_DMA_DESCR_CH8;
         stream->dma_dscr_idx_2 = PLAYBACK_START_DMA_DESCR_CH9;
@@ -462,25 +481,12 @@ NTSTATUS CCsAudioAcp2xHW::acp2x_hw_params(eDeviceType deviceType) {
             mmACP_I2S_TRANSMIT_BYTE_CNT_LOW;
         break;
     case eMicArrayDevice1:
-        stream->pte_offset = ACP_ST_BT_CAPTURE_PTE_OFFSET;
-        stream->ch1 = I2S_TO_ACP_DMA_BT_INSTANCE_CH_NUM;
-        stream->ch2 = ACP_TO_SYSRAM_BT_INSTANCE_CH_NUM;
-        stream->sram_bank = ACP_SRAM_BANK_4_ADDRESS;
-        stream->destination = FROM_BLUETOOTH;
-        stream->dma_dscr_idx_1 = CAPTURE_START_DMA_DESCR_CH10;
-        stream->dma_dscr_idx_2 = CAPTURE_START_DMA_DESCR_CH11;
-        stream->byte_cnt_high_reg_offset =
-            mmACP_I2S_BT_RECEIVE_BYTE_CNT_HIGH;
-        stream->byte_cnt_low_reg_offset =
-            mmACP_I2S_BT_RECEIVE_BYTE_CNT_LOW;
-        stream->dma_curr_dscr = mmACP_DMA_CUR_DSCR_11;
-        break;
     case eMicJackDevice:
         stream->pte_offset = ACP_CAPTURE_PTE_OFFSET;
         stream->ch1 = I2S_TO_ACP_DMA_CH_NUM;
         stream->ch2 = ACP_TO_SYSRAM_CH_NUM;
         stream->pte_offset = ACP_ST_CAPTURE_PTE_OFFSET;
-        stream->sram_bank = ACP_SRAM_BANK_2_ADDRESS;
+        stream->sram_bank = ACP_SRAM_BANK_3_ADDRESS;
         stream->destination = FROM_ACP_I2S_1;
         stream->dma_dscr_idx_1 = CAPTURE_START_DMA_DESCR_CH14;
         stream->dma_dscr_idx_2 = CAPTURE_START_DMA_DESCR_CH15;
@@ -744,6 +750,58 @@ NTSTATUS CCsAudioAcp2xHW::acp2x_program_dma(eDeviceType deviceType, PMDL mdl, IP
     return STATUS_SUCCESS;
 }
 
+void CCsAudioAcp2xHW::acp_dma_cap_channel_enable(UINT16 cap_channel)
+{
+    UINT32 val, ch_reg, imr_reg, res_reg;
+
+    switch (cap_channel) {
+    case CAP_CHANNEL1:
+        ch_reg = mmACP_I2SMICSP_RER1;
+        res_reg = mmACP_I2SMICSP_RCR1;
+        imr_reg = mmACP_I2SMICSP_IMR1;
+        break;
+    case CAP_CHANNEL0:
+    default:
+        ch_reg = mmACP_I2SMICSP_RER0;
+        res_reg = mmACP_I2SMICSP_RCR0;
+        imr_reg = mmACP_I2SMICSP_IMR0;
+        break;
+    }
+    val = acp_read32(mmACP_I2S_16BIT_RESOLUTION_EN);
+    if (val & ACP_I2S_MIC_16BIT_RESOLUTION_EN) {
+        acp_write32(ch_reg, 0x0);
+        /* Set 16bit resolution on capture */
+        acp_write32(res_reg, 0x2);
+    }
+    val = acp_read32(imr_reg);
+    val &= ~ACP_I2SMICSP_IMR1__I2SMICSP_RXDAM_MASK;
+    val &= ~ACP_I2SMICSP_IMR1__I2SMICSP_RXFOM_MASK;
+    acp_write32(imr_reg, val);
+    acp_write32(ch_reg, 0x1);
+}
+
+void CCsAudioAcp2xHW::acp_dma_cap_channel_disable(UINT16 cap_channel)
+{
+    UINT32 val, ch_reg, imr_reg;
+
+    switch (cap_channel) {
+    case CAP_CHANNEL1:
+        imr_reg = mmACP_I2SMICSP_IMR1;
+        ch_reg = mmACP_I2SMICSP_RER1;
+        break;
+    case CAP_CHANNEL0:
+    default:
+        imr_reg = mmACP_I2SMICSP_IMR0;
+        ch_reg = mmACP_I2SMICSP_RER0;
+        break;
+    }
+    val = acp_read32(imr_reg);
+    val |= ACP_I2SMICSP_IMR1__I2SMICSP_RXDAM_MASK;
+    val |= ACP_I2SMICSP_IMR1__I2SMICSP_RXFOM_MASK;
+    acp_write32(imr_reg, val);
+    acp_write32(ch_reg, 0x0);
+}
+
 void CCsAudioAcp2xHW::acp_dma_start(UINT16 ch_num, BOOL isCircular) {
     UINT32 dma_ctrl;
 
@@ -842,11 +900,28 @@ NTSTATUS CCsAudioAcp2xHW::acp2x_play(eDeviceType deviceType) {
         return STATUS_SUCCESS;
     }
 
+
+    BOOL isPlaying = acp_is_playback(deviceType);
+
+    if (!isPlaying) {
+        switch (deviceType) {
+        case eMicArrayDevice1:
+            acp_dma_cap_channel_disable(CAP_CHANNEL1);
+            acp_dma_cap_channel_enable(CAP_CHANNEL0);
+            break;
+        case eMicJackDevice:
+            acp_dma_cap_channel_disable(CAP_CHANNEL0);
+            acp_dma_cap_channel_enable(CAP_CHANNEL1);
+            break;
+        default:
+            break;
+        }
+    }
+
     acp_dma_start(acpStream->ch1, TRUE);
     acp_dma_start(acpStream->ch2, TRUE);
 
     UINT32 i2s_base = acp_get_i2s_regs(deviceType);
-    BOOL isPlaying = acp_is_playback(deviceType);
 
     i2s_write32(i2s_base, IER, 1);
 

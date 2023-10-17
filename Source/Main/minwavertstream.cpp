@@ -5,7 +5,6 @@
 #include "minwavert.h"
 #include "minwavertstream.h"
 #include "acp2x.h"
-#include "dw_i2s.h"
 #define MINWAVERTSTREAM_POOLTAG 'SRWM'
 
 #pragma warning (disable : 4127)
@@ -308,8 +307,8 @@ _Out_   MEMORY_CACHING_TYPE    *CacheType_
         return STATUS_UNSUCCESSFUL;
     }
 
-    if (RequestedSize_ > BUFFER_BYTES_MAX) {
-        RequestedSize_ = BUFFER_BYTES_MAX;
+    if (RequestedSize_ > ST_MAX_BUFFER) {
+        RequestedSize_ = ST_MAX_BUFFER;
     }
 
     RequestedSize_ -= RequestedSize_ % (m_pWfExt->Format.nBlockAlign);

@@ -162,6 +162,7 @@ private:
 
     UINT32 acp_get_i2s_regs(eDeviceType deviceType);
     BOOL acp_is_playback(eDeviceType deviceType);
+    eDeviceType acp_get_companion(eDeviceType deviceType);
     struct acp_stream* acp_get_stream(eDeviceType deviceType);
 
     void acp_set_sram_bank_state(UINT16 bank, bool power_on);
@@ -175,6 +176,9 @@ private:
         UINT32 sram_bank, UINT16 dma_dscr_idx);
     void set_acp_to_i2s_dma_descriptors(UINT32 size, BOOL playback, UINT32 sram_bank,
         UINT32 destination, UINT16 ch, UINT16 dma_dscr_idx);
+
+    void acp_dma_cap_channel_enable(UINT16 cap_channel);
+    void acp_dma_cap_channel_disable(UINT16 cap_channel);
 
     void acp_dma_start(UINT16 ch_num, BOOL isCircular);
     NTSTATUS acp_dma_stop(UINT16 ch_num);
