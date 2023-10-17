@@ -266,7 +266,7 @@ VOID CMiniportWaveRTStream::GetHWLatency
 
     Latency_->ChipsetDelay = 0;
     Latency_->CodecDelay = 0;
-    Latency_->FifoSize = 0;
+    Latency_->FifoSize = 8;
 }
 
 //=============================================================================
