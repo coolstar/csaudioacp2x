@@ -399,12 +399,12 @@ NTSTATUS CCsAudioAcp2xHW::acp2x_hw_params(eDeviceType deviceType) {
             break;
         case eHeadphoneDevice:
             comp1 = i2s_read32(i2s_base, ACP_I2S_COMP1_PLAY_REG_OFFSET);
-            comp1 = i2s_read32(i2s_base, ACP_I2S_COMP2_PLAY_REG_OFFSET);
+            comp2 = i2s_read32(i2s_base, ACP_I2S_COMP2_PLAY_REG_OFFSET);
             break;
         case eMicArrayDevice1:
         case eMicJackDevice:
             comp1 = i2s_read32(i2s_base, ACP_I2S_COMP1_CAP_REG_OFFSET);
-            comp1 = i2s_read32(i2s_base, ACP_I2S_COMP2_CAP_REG_OFFSET);
+            comp2 = i2s_read32(i2s_base, ACP_I2S_COMP2_CAP_REG_OFFSET);
             break;
         default:
             DPF(D_ERROR, "Unknown device type");
